@@ -15,6 +15,22 @@ const api = axios.create({
   headers: TMAIL_API_KEY ? { Authorization: `Bearer ${TMAIL_API_KEY}` } : {}
 });
 
+function logApiError(label, err) {
+  const status = err?.response?.status || '-';
+  const data = err?.response?.data || null;
+  const code = err?.code || '-';
+  const message = err?.message || String(err);
+  console.error(`[TMAIL API] ${label} gagal`);
+  console.error(`URL: ${TMAIL_API_URL || '(kosong/fallback)'}`);
+  console.error(`Status: ${status}`);
+  console.error(`Code: ${code}`);
+  console.error(`Message: ${message}`);
+  if (data) console.error('Response:', data);
+}
+
+console.log(`TMAIL_API_URL: ${TMAIL_API_URL || '(belum diisi)'}`);
+console.log(`TMAIL_API_KEY: ${TMAIL_API_KEY ? 'terisi' : 'BELUM DIISI'}`);
+
 const mainMenu = Markup.inlineKeyboard([
   [Markup.button.callback('➕ Buat Email', 'create_email')],
   [Markup.button.callback('📥 Masukkan Email', 'access_email')],
@@ -51,8 +67,9 @@ bot.action('my_emails', async (ctx) => {
     const emails = Array.isArray(data?.emails) ? data.emails : [];
     if (!emails.length) return ctx.reply('Belum ada email yang tersimpan untuk akun Telegram ini.', mainMenu);
     return ctx.reply(`📮 Email kamu:\n\n${emails.map((x, i) => `${i + 1}. ${x.address || x.email || x}`).join('\n')}`, mainMenu);
-  } catch {
-    return ctx.reply('Gagal mengambil daftar email. Pastikan backend TMail sudah tersambung.', mainMenu);
+  } catch (err) {
+    logApiError('GET /emails', err);
+    return ctx.reply('Gagal mengambil daftar email. Cek Console bot untuk detail error.', mainMenu);
   }
 });
 
@@ -81,8 +98,9 @@ bot.on('text', async (ctx) => {
       if (!address) throw new Error('invalid response');
       resetState(ctx);
       return ctx.reply(`✅ Email berhasil dibuat.\n\n📧 ${address}\n🔐 PIN: ${text}\n\nSimpan PIN ini untuk membuka email lagi.`, mainMenu);
-    } catch {
-      return ctx.reply('Gagal membuat email. Backend TMail belum tersedia atau terjadi error.', mainMenu);
+    } catch (err) {
+      logApiError('POST /emails/create', err);
+      return ctx.reply('Gagal membuat email. Cek Console bot untuk detail error.', mainMenu);
     }
   }
 
@@ -110,8 +128,9 @@ bot.on('text', async (ctx) => {
       const subject = latest.subject || '-';
       const body = latest.text || latest.body || '';
       return ctx.reply(`📨 Pesan terbaru\n\n📧 Email: ${email}\n👤 Dari: ${sender}\n📝 Subjek: ${subject}\n🔑 Kode: ${otp}\n\n${body}`.slice(0, 3900), inboxButtons(email));
-    } catch {
-      return ctx.reply('❌ Email atau PIN salah, atau backend TMail sedang tidak tersedia.', mainMenu);
+    } catch (err) {
+      logApiError('POST /emails/access', err);
+      return ctx.reply('❌ Gagal membuka email. Cek Console bot untuk detail error.', mainMenu);
     }
   }
 });
